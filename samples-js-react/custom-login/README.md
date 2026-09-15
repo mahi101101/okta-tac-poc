@@ -1,15 +1,25 @@
-# Okta React + Custom Login Example
+# Okta React + Custom Headless Login Example
 
-This example shows you how to use the [Okta React Library][] and [React Router](https://github.com/ReactTraining/react-router) to login a user to a React application.  The login is achieved with the [Okta Sign In Widget][], which gives you more control to customize the login experience within your app.
+This example shows you how to use the [Okta React Library][] and `@okta/okta-auth-js` SDK to log a user into a React application. Unlike standard implementations, this application **bypasses the Okta Sign-In Widget entirely**. It utilizes a completely custom, headless state machine to dynamically route users to either a standard Password challenge or a custom Temporary Access Code (TAC) challenge. 
 
-This example is built with [Create React App][].
+This example is built with Vite and React.
+
+## How It Works (Architecture Logic)
+
+This application orchestrates a highly customized authentication flow using Okta's Identity Engine (OIE) APIs:
+
+1. **Intelligence Gathering (Identify):** When a user enters their email, the React app pauses and silently queries the local Node Proxy. The proxy checks the user's enrolled factors and returns whether the user requires a TAC or a standard password.
+2. **First Bypass (Auto-Selection):** The app starts the Okta transaction. When Okta returns the `select-authenticator-authenticate` step, the app intercepts it, automatically selects the correct authenticator ID (Password or TAC) based on the proxy's intelligence, and pushes the state machine forward. The user never sees a selection screen.
+3. **Custom Challenge (Credential):** The React UI renders a hardcoded, custom input screen based on the bypass. It formats the submission payload strictly (using the `password` key for standard logins and a nested `credentials: { passcode }` object for TACs).
+4. **Second Bypass (Enrollment):** If a TAC is accepted, Okta requires the user to enroll a permanent password. The app intercepts the `select-authenticator-enroll` state, auto-selects the Password factor, and drops the user into a custom "Set Permanent Password" screen. Once submitted, the session is created.
 
 ## Prerequisites
 
 Before running this sample, you will need the following:
 
 * An Okta Developer Account, you can sign up for one at https://developer.okta.com/signup/.
-* An Okta Application, configured for Single-Page App (SPA) mode. This is done from the Okta Developer Console, you can see the [OIDC SPA Setup Instructions][].  When following the wizard, use the default properties.  They are designed to work with our sample applications.
+* An Okta Application, configured for Single-Page App (SPA) mode. This is done from the Okta Developer Console. When following the wizard, use the default properties.
+* **The Node Intelligence Proxy** (provided in the backend repo) must be running locally on port 3001.
 
 ## Enable Refresh Tokens
 
@@ -17,70 +27,27 @@ Add a required setting to your SPA Okta app to avoid third-party cookies. Naviga
 
 ## Running This Example
 
-To run this application, you first need to clone this repo:
-
-```bash
-git clone https://github.com/okta/samples-js-react.git
-```
-
-Then install dependencies:
+To run this application, you first need to clone your repository and install the dependencies:
 
 ```bash
 npm install
 ```
 
-Enter into custom-login directory:
-
-```bash
-cd samples-js-react/custom-login
-```
-
 Now you need to gather the following information from the Okta Developer Console:
 
-* **Client Id** - The client ID of the SPA application that you created earlier. This can be found on the "General" tab of an application, or the list of applications.  This identifies the application that tokens will be minted for.
-* **Issuer** - This is the URL of the authorization server that will perform authentication.  All Developer Accounts have a "default" authorization server.  The issuer is a combination of your Org URL (found in the upper right of the console home page) and `/oauth2/default`. For example, `https://dev-1234.oktapreview.com/oauth2/default`.
+* **Client Id** - The client ID of the SPA application that you created earlier. This can be found on the "General" tab of an application.
+* **Issuer** - This is the URL of the authorization server that will perform authentication. The issuer is a combination of your Org URL and `/oauth2/default`. For example, `https://dev-1234.oktapreview.com/oauth2/default`.
 
-These values must exist as environment variables. They can be exported in the shell, or saved in a file named `testenv`, at the root of this repository. (This is the parent directory, relative to this README) See [dotenv](https://www.npmjs.com/package/dotenv) for more details on this file format.
+These values must exist as environment variables. Save them in a file named `.env` at the root of this repository:
 
 ```ini
-ISSUER=https://yourOktaDomain.com/oauth2/default
-CLIENT_ID=123xxxxx123
+VITE_ISSUER=[https://yourOktaDomain.com/oauth2/default](https://yourOktaDomain.com/oauth2/default)
+VITE_CLIENT_ID=123xxxxx123
 ```
 
-> NOTE: If you are running the sample against an org that does **NOT** have [Okta's Identity Engine](https://developer.okta.com/docs/concepts/ie-intro/) enabled, you will need to add the following environment variable to your `testenv` file
-> USE_CLASSIC_ENGINE=true
 With variables set, start the app server:
-
 ```bash
 npm start
 ```
 
-You could also start the app server from root directory like:
-
-```bash
-npm run custom-login-server
-```
-
-Now navigate to http://localhost:8080 in your browser.
-
-If you see a home page that prompts you to login, then things are working!  Clicking the **Log in** button will render a custom login page component that uses the Okta Sign-In Widget to perform authentication.
-
-You can login with the same account that you created when signing up for your Developer Org, or you can use a known username and password from your Okta Directory.
-
-**Note:** If you are currently using your Developer Console, you already have a Single Sign-On (SSO) session for your Org.  You will be automatically logged into your application as the same user that is using the Developer Console.  You may want to use an incognito tab to test the flow from a blank slate.
-
-## Integrating The Resource Server
-
-If you were able to successfully login in the previous section you can continue with the resource server example.  Please download and run one of these sample applications in another terminal:
-
-* [Node/Express Resource Server Example](https://github.com/okta/samples-nodejs-express-4/tree/master/resource-server)
-* [Java/Spring MVC Resource Server Example](https://github.com/okta/samples-java-spring/tree/master/resource-server)
-* [ASP.NET](https://github.com/okta/samples-aspnet/tree/master/resource-server) and [ASP.NET Core](https://github.com/okta/samples-aspnetcore/tree/master/samples-aspnetcore-3x/resource-server) Resource Server Examples
-
-Once you have the resource server running (it will run on port 8000) you can visit the `/messages` page within the React application to see the authentication flow.  The React application will use its stored access token to authenticate itself with the resource server, you will see this as the `Authorization: Bearer <access_token>` header on the request if you inspect the network traffic in the browser.
-
-[Create React App]: https://create-react-app.dev
-[Okta React Library]: https://github.com/okta/okta-react
-[OIDC SPA Setup Instructions]: https://developer.okta.com/docs/guides/sign-into-spa/react/before-you-begin
-[PKCE Flow]: https://developer.okta.com/docs/guides/implement-auth-code-pkce
-[Okta Sign In Widget]: https://github.com/okta/okta-signin-widget
+Now navigate to http://localhost:8080 (or your configured Vite port) in your browser. Ensure the Node proxy is running concurrently, or the initial intelligence lookup will fail.
